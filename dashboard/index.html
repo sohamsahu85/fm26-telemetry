@@ -1,0 +1,507 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Formula Manipal — Live Telemetry</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@400;500;600;700&family=Share+Tech+Mono&display=swap"
+      rel="stylesheet"
+    />
+    <link
+      rel="stylesheet"
+      href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+    />
+    <link rel="stylesheet" href="index.css" />
+  </head>
+
+  <body>
+    <!-- ═══════════════════════ HEADER ═══════════════════════ -->
+    <header class="top-bar">
+      <div class="top-bar__brand">
+        <img
+          src="IMG_4700.PNG"
+          alt="Formula Manipal E10"
+          class="brand-car-sticker"
+        />
+        <div class="brand-dot"></div>
+        <span class="brand-name">FORMULA MANIPAL</span>
+        <span class="brand-sub">TELEMETRY</span>
+      </div>
+
+      <div class="top-bar__status">
+        <div class="status-pill" id="statusPill">
+          <span class="status-dot" id="statusDot"></span>
+          <span id="statusText">DISCONNECTED</span>
+        </div>
+        <div class="data-rate" id="dataRate">- Hz</div>
+      </div>
+
+      <div class="top-bar__controls">
+        <select id="baudSelect" class="baud-select">
+          <option value="9600">9600</option>
+          <option value="115200" selected>115200</option>
+          <option value="230400">230400</option>
+          <option value="460800">460800</option>
+        </select>
+        <button id="connectBtn" class="btn-connect" onclick="toggleConnect()">
+          CONNECT
+        </button>
+        <button class="btn-demo" onclick="toggleDemo()" id="demoBtn">
+          DEMO
+        </button>
+        <button
+          class="btn-demo"
+          onclick="toggleDiag()"
+          id="diagBtn"
+          title="Show raw bytes from serial in the log panel"
+        >
+          DIAG
+        </button>
+        <button
+          class="btn-download"
+          onclick="downloadCSV()"
+          id="downloadBtn"
+          title="Download session telemetry data as CSV"
+        >
+          CSV &darr;
+        </button>
+      </div>
+    </header>
+
+    <!-- ═══════════════════════ TIMESTAMP BAR ═══════════════════════ -->
+    <div class="ts-bar">
+      <span class="ts-label">TIMESTAMP</span>
+      <span class="ts-value mono" id="tsValue">—</span>
+      <span class="ts-label" style="margin-left: 2rem">PACKETS RECEIVED</span>
+      <span class="ts-value mono" id="pktCount">0</span>
+      <span class="ts-label" style="margin-left: 2rem">LAST PACKET</span>
+      <span class="ts-value mono" id="lastPkt">—</span>
+    </div>
+
+    <!-- ═══════════════════════ MAIN GRID ═══════════════════════ -->
+    <main class="dashboard">
+      <!-- ── LEFT COLUMN: DYNAMICS & BMS & IMU ── -->
+      <div class="panel-col">
+        <div class="dynamics-grid">
+          <div class="dynamics-card dynamics-card--speed">
+            <div class="dynamics-big-value mono" id="val-vehicleSpeed">0.0</div>
+            <div class="dynamics-unit">km/h</div>
+            <div class="dynamics-label">VEHICLE SPEED</div>
+            <div class="speed-bar-track">
+              <div class="speed-bar-fill" id="speedBarFill"></div>
+            </div>
+          </div>
+          <div class="dynamics-card">
+            <div class="dynamics-value mono" id="val-motorRPM">—</div>
+            <div class="dynamics-unit">RPM</div>
+            <div class="dynamics-label">MOTOR SPEED</div>
+          </div>
+          <div class="dynamics-card">
+            <div class="dynamics-value mono" id="val-wheelSpeed">—</div>
+            <div class="dynamics-unit">RPM</div>
+            <div class="dynamics-label">WHEEL SPEED</div>
+          </div>
+          <div class="dynamics-card dynamics-card--vsm">
+            <div class="vsm-state-label">VSM STATE</div>
+            <div class="vsm-state-value mono" id="val-vsmState">—</div>
+            <div class="vsm-state-name" id="val-vsmName">UNKNOWN</div>
+          </div>
+        </div>
+
+        <div class="bms-grid">
+          <div class="gauge-card" id="card-bmsTotal">
+            <svg class="gauge-svg" viewBox="0 0 120 120">
+              <circle class="gauge-track" cx="60" cy="60" r="50" />
+              <circle
+                class="gauge-fill"
+                id="arc-bmsTotal"
+                cx="60"
+                cy="60"
+                r="50"
+                stroke-dasharray="251.2"
+                stroke-dashoffset="251.2"
+                transform="rotate(-210 60 60)"
+              />
+            </svg>
+            <div class="gauge-center">
+              <div class="gauge-value" id="val-bmsTotal">—</div>
+              <div class="gauge-unit">VOLTS</div>
+            </div>
+            <div class="gauge-label">PACK VOLTAGE</div>
+            <div class="gauge-range">0 – 378 V</div>
+          </div>
+
+          <div class="gauge-card" id="card-bmsTemp">
+            <svg class="gauge-svg" viewBox="0 0 120 120">
+              <circle class="gauge-track" cx="60" cy="60" r="50" />
+              <circle
+                class="gauge-fill gauge-fill--warn"
+                id="arc-bmsTemp"
+                cx="60"
+                cy="60"
+                r="50"
+                stroke-dasharray="251.2"
+                stroke-dashoffset="251.2"
+                transform="rotate(-210 60 60)"
+              />
+            </svg>
+            <div class="gauge-center">
+              <div class="gauge-value" id="val-bmsTemp">—</div>
+              <div class="gauge-unit">°C</div>
+            </div>
+            <div class="gauge-label">AVG PACK TEMP</div>
+            <div class="gauge-range">0 – 80 °C</div>
+          </div>
+
+          <div class="gauge-card" id="card-bmsCurrent">
+            <svg class="gauge-svg" viewBox="0 0 120 120">
+              <circle class="gauge-track" cx="60" cy="60" r="50" />
+              <circle
+                class="gauge-fill gauge-fill--current"
+                id="arc-bmsCurrent"
+                cx="60"
+                cy="60"
+                r="50"
+                stroke-dasharray="251.2"
+                stroke-dashoffset="251.2"
+                transform="rotate(-210 60 60)"
+              />
+            </svg>
+            <div class="gauge-center">
+              <div class="gauge-value" id="val-bmsCurrent">—</div>
+              <div class="gauge-unit">AMPS</div>
+            </div>
+            <div class="gauge-label">PACK CURRENT</div>
+            <div class="gauge-range">0 – 180 A</div>
+          </div>
+
+          <div class="gauge-card" id="card-bmsLowCell">
+            <svg class="gauge-svg" viewBox="0 0 120 120">
+              <circle class="gauge-track" cx="60" cy="60" r="50" />
+              <circle
+                class="gauge-fill gauge-fill--cell"
+                id="arc-bmsLowCell"
+                cx="60"
+                cy="60"
+                r="50"
+                stroke-dasharray="251.2"
+                stroke-dashoffset="251.2"
+                transform="rotate(-210 60 60)"
+              />
+            </svg>
+            <div class="gauge-center">
+              <div class="gauge-value" id="val-bmsLowCell">—</div>
+              <div class="gauge-unit">VOLTS</div>
+            </div>
+            <div class="gauge-label">LOWEST CELL V</div>
+            <div class="gauge-range">2.5 – 4.2 V</div>
+          </div>
+        </div>
+
+        <div class="segment-grid">
+          <div class="seg-card">
+            <div class="seg-number">S0</div>
+            <div class="seg-value mono" id="val-seg0">—</div>
+            <div class="seg-unit">V</div>
+            <div class="seg-bar-track">
+              <div class="seg-bar-fill seg-bar-fill--0" id="segBar0"></div>
+            </div>
+          </div>
+          <div class="seg-card">
+            <div class="seg-number">S1</div>
+            <div class="seg-value mono" id="val-seg1">—</div>
+            <div class="seg-unit">V</div>
+            <div class="seg-bar-track">
+              <div class="seg-bar-fill seg-bar-fill--1" id="segBar1"></div>
+            </div>
+          </div>
+          <div class="seg-card">
+            <div class="seg-number">S2</div>
+            <div class="seg-value mono" id="val-seg2">—</div>
+            <div class="seg-unit">V</div>
+            <div class="seg-bar-track">
+              <div class="seg-bar-fill seg-bar-fill--2" id="segBar2"></div>
+            </div>
+          </div>
+          <div class="seg-card">
+            <div class="seg-number">S3</div>
+            <div class="seg-value mono" id="val-seg3">—</div>
+            <div class="seg-unit">V</div>
+            <div class="seg-bar-track">
+              <div class="seg-bar-fill seg-bar-fill--3" id="segBar3"></div>
+            </div>
+          </div>
+          <div class="seg-card">
+            <div class="seg-number">S4</div>
+            <div class="seg-value mono" id="val-seg4">—</div>
+            <div class="seg-unit">V</div>
+            <div class="seg-bar-track">
+              <div class="seg-bar-fill seg-bar-fill--4" id="segBar4"></div>
+            </div>
+          </div>
+        </div>
+
+        <div
+          class="lap-header-mini"
+          style="
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 0.8rem;
+            margin-top: 1rem;
+          "
+        >
+          <span
+            style="
+              font-size: 0.65rem;
+              color: var(--text-dim);
+              letter-spacing: 0.1em;
+            "
+            >Auto lap &lt;8m from S/F</span
+          >
+          <button class="btn-set-sf" onclick="setStartFinish()">
+            📍 SET S/F
+          </button>
+        </div>
+        <div class="lap-grid">
+          <div class="lap-card">
+            <div class="lap-val" id="lapCurrent">0:00.000</div>
+            <div class="lap-lbl">Current Lap</div>
+          </div>
+          <div class="lap-card">
+            <div class="lap-val" id="lapLast">—</div>
+            <div class="lap-lbl">Last Lap</div>
+          </div>
+          <div class="lap-card">
+            <div class="lap-val best" id="lapBest">—</div>
+            <div class="lap-lbl">Best Lap</div>
+          </div>
+          <div class="lap-card">
+            <div class="lap-val" id="lapCount">0</div>
+            <div class="lap-lbl">Lap Count</div>
+          </div>
+        </div>
+
+        <div class="imu-grid" style="margin-top: 1rem">
+          <!-- 3D Cube -->
+          <div class="cube-panel">
+            <div class="cube-scene">
+              <div class="cube" id="imuCube">
+                <div class="cube-face cube-face--front">FRONT</div>
+                <div class="cube-face cube-face--back">BACK</div>
+                <div class="cube-face cube-face--left">LEFT</div>
+                <div class="cube-face cube-face--right">RIGHT</div>
+                <div class="cube-face cube-face--top">TOP</div>
+                <div class="cube-face cube-face--bottom">BOT</div>
+              </div>
+            </div>
+            <div class="cube-label">3D ORIENTATION</div>
+          </div>
+
+          <!-- Yaw / Pitch / Roll numeric + bar -->
+          <div class="euler-panel">
+            <div class="euler-row">
+              <span class="euler-name">YAW</span>
+              <div class="euler-bar-wrap">
+                <div class="euler-bar" id="bar-yaw"></div>
+              </div>
+              <span class="euler-val mono" id="val-yaw">—°</span>
+            </div>
+            <div class="euler-row">
+              <span class="euler-name">PITCH</span>
+              <div class="euler-bar-wrap">
+                <div class="euler-bar euler-bar--pitch" id="bar-pitch"></div>
+              </div>
+              <span class="euler-val mono" id="val-pitch">—°</span>
+            </div>
+            <div class="euler-row">
+              <span class="euler-name">ROLL</span>
+              <div class="euler-bar-wrap">
+                <div class="euler-bar euler-bar--roll" id="bar-roll"></div>
+              </div>
+              <span class="euler-val mono" id="val-roll">—°</span>
+            </div>
+          </div>
+        </div>
+      </div>
+      <!-- /LEFT COLUMN -->
+
+      <!-- ── CENTER COLUMN: LIVE GRAPHS ── -->
+      <div class="panel-col">
+        <div class="graphs-panel" style="flex: 1">
+          <div
+            class="graph-block"
+            style="flex: 1; display: flex; flex-direction: column"
+          >
+            <div class="graph-header">
+              <span class="graph-title">POWERTRAIN</span>
+              <div class="graph-legend">
+                <span class="legend-pill" style="--c: #ff2020">Motor RPM</span>
+                <span class="legend-pill" style="--c: #ffaa00">Wheel RPM</span>
+              </div>
+            </div>
+            <div class="graph-canvas-wrap">
+              <canvas id="chart-powertrain"></canvas>
+            </div>
+          </div>
+
+          <div
+            class="graph-block"
+            style="flex: 1; display: flex; flex-direction: column"
+          >
+            <div class="graph-header">
+              <span class="graph-title">BATTERY ELECTRICAL</span>
+              <div class="graph-legend">
+                <span class="legend-pill" style="--c: #00e5ff">Pack V</span>
+                <span class="legend-pill" style="--c: #ff6b35">Current A</span>
+              </div>
+            </div>
+            <div class="graph-canvas-wrap">
+              <canvas id="chart-electrical"></canvas>
+            </div>
+          </div>
+
+          <div
+            class="graph-block"
+            style="flex: 1; display: flex; flex-direction: column"
+          >
+            <div class="graph-header">
+              <span class="graph-title">THERMALS</span>
+              <div class="graph-legend">
+                <span class="legend-pill" style="--c: #ff4081"
+                  >Avg Temp °C</span
+                >
+                <span class="legend-pill" style="--c: #69ff47"
+                  >Low Cell V ×20</span
+                >
+              </div>
+            </div>
+            <div class="graph-canvas-wrap">
+              <canvas id="chart-thermal"></canvas>
+            </div>
+          </div>
+        </div>
+      </div>
+      <!-- /CENTER COLUMN -->
+
+      <!-- ── RIGHT COLUMN: MAPS & GRAPHS & LOG ── -->
+      <div class="panel-col panel-col--right">
+        <div class="position-grid" style="flex: 1.5">
+          <div class="map-panel">
+            <div class="map-header">
+              <span class="map-title">LIVE 3D TRACK (VN-200 ECEF)</span>
+              <div class="position-coords">
+                <span class="coord-label">X:</span>
+                <span class="coord-value mono" id="val-posX">—</span>
+                <span class="coord-label">Y:</span>
+                <span class="coord-value mono" id="val-posY">—</span>
+                <span class="coord-label">Z:</span>
+                <span class="coord-value mono" id="val-posZ">—</span>
+              </div>
+            </div>
+            <div class="map-container" id="threeContainer"></div>
+          </div>
+          <div class="position-stats">
+            <div class="stat-card">
+              <div class="stat-label">ALTITUDE (Z)</div>
+              <div class="stat-value mono" id="val-altitude">— m</div>
+            </div>
+            <div class="stat-card">
+              <div class="stat-label">GROUND SPEED</div>
+              <div class="stat-value mono" id="val-groundSpeed">— m/s</div>
+            </div>
+            <div class="stat-card">
+              <div class="stat-label">TOTAL DISTANCE</div>
+              <div class="stat-value mono" id="val-totalDistance">— m</div>
+            </div>
+            <div class="stat-card">
+              <div class="stat-label">TRACK POINTS</div>
+              <div class="stat-value mono" id="val-trackPoints">0</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="sat-map-wrapper" style="flex: 1.5">
+          <div class="sat-map-header">
+            <span class="map-title">LIVE GPS TRACK</span>
+            <div class="position-coords">
+              <span class="coord-label">LAT:</span>
+              <span class="coord-value mono" id="val-lat">—</span>
+              <span class="coord-label">LON:</span>
+              <span class="coord-value mono" id="val-lon">—</span>
+            </div>
+          </div>
+          <div id="leafletMap"></div>
+        </div>
+
+        <div class="graphs-panel" style="flex: 1">
+          <div
+            class="graph-block"
+            style="flex: 1; display: flex; flex-direction: column"
+          >
+            <div class="graph-header">
+              <span class="graph-title">VEHICLE SPEED</span>
+              <div class="graph-legend">
+                <span class="legend-pill" style="--c: #ffea00">km/h</span>
+              </div>
+            </div>
+            <div class="graph-canvas-wrap">
+              <canvas id="chart-speed"></canvas>
+            </div>
+          </div>
+
+          <div
+            class="graph-block"
+            style="flex: 1; display: flex; flex-direction: column"
+          >
+            <div class="graph-header">
+              <span class="graph-title">ORIENTATION</span>
+              <div class="graph-legend">
+                <span class="legend-pill" style="--c: #e040fb">Yaw</span>
+                <span class="legend-pill" style="--c: #00e676">Pitch</span>
+                <span class="legend-pill" style="--c: #40c4ff">Roll</span>
+              </div>
+            </div>
+            <div class="graph-canvas-wrap">
+              <canvas id="chart-orientation"></canvas>
+            </div>
+          </div>
+
+          <div
+            class="graph-block"
+            style="flex: 1; display: flex; flex-direction: column"
+          >
+            <div class="graph-header">
+              <span class="graph-title">LAP TIMES</span>
+              <div class="graph-legend">
+                <span class="legend-pill" style="--c: #40c4ff"
+                  >seconds per lap</span
+                >
+              </div>
+            </div>
+            <div class="graph-canvas-wrap">
+              <canvas id="chart-laptimes"></canvas>
+            </div>
+          </div>
+        </div>
+
+        <div
+          class="log-body"
+          id="logBody"
+          style="height: 80px; flex: none"
+        ></div>
+      </div>
+      <!-- /RIGHT COLUMN -->
+    </main>
+
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.148.0/build/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.148.0/examples/js/controls/OrbitControls.js"></script>
+
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script src="app.js"></script>
+  </body>
+</html>
